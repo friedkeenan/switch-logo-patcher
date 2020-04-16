@@ -1,16 +1,15 @@
 # Switch Logo Patcher
 
-### How to use
+Creates the IPS patches needed to replace the Switch logo on boot.
 
-First you need to make a base IPS patch of the raw bytes of the original logo and the raw bytes of the logo you want to use ([flips](https://github.com/Alcaro/Flips) is good for that), and then run `./gen_patches.py <patch file> <patches dir>`.
-
-More detaied command usage:
+### Usage
 
 ```
-usage: gen_patches.py [-h] patch_file patches_dir
+usage: gen_patches.py [-h] old_logo new_logo patches_dir
 
 positional arguments:
-  patch_file   The base logo patch
+  old_logo     The original logo image
+  new_logo     The new logo image
   patches_dir  The directory where the generated patches will be dumped
 
 optional arguments:
