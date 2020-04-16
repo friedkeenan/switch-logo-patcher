@@ -29,15 +29,15 @@ patch_info = {
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("old_logo", help="The original logo image", type=Image.open)
-    parser.add_argument("new_logo", help="The new logo image", type=Image.open)
+    parser.add_argument("old_logo", help="The original logo image", type=Path)
+    parser.add_argument("new_logo", help="The new logo image", type=Path)
     parser.add_argument("patches_dir", help="The directory where the generated patches will be dumped", type=Path)
     args = parser.parse_args()
 
-    args.old_logo.convert("RGBA")
-    args.new_logo.convert("RGBA")
+    old_logo = Image.open(args.old_logo).convert("RGBA")
+    new_logo = Image.open(args.new_logo).convert("RGBA")
 
-    base_patch = ips.Patch.create(args.old_logo.tobytes(), args.new_logo.tobytes())
+    base_patch = ips.Patch.create(old_logo.tobytes(), new_logo.tobytes())
 
     if not args.patches_dir.exists():
         os.makedirs(args.patches_dir)
