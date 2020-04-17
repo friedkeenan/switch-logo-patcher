@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-import os
-import copy
 import io
-import argparse
 import ips
+import argparse
 from pathlib import Path
 from PIL import Image
 
@@ -29,27 +27,40 @@ patch_info = {
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("old_logo", help="The original logo image", type=Path)
-    parser.add_argument("new_logo", help="The new logo image", type=Path)
     parser.add_argument("patches_dir", help="The directory where the generated patches will be dumped", type=Path)
+    parser.add_argument("new_logo", help="The new logo image", type=Path)
+    parser.add_argument("-o", "--old_logo", help="The original logo image", type=Path, default=None)
     args = parser.parse_args()
 
-    old_logo = Image.open(args.old_logo).convert("RGBA")
-    new_logo = Image.open(args.new_logo).convert("RGBA")
+    if args.old_logo is None:
+        new_logo = Image.open(args.new_logo).convert("RGBA")
+        if new_logo.size != (308, 350):
+            raise ValueError("Invalid size for the logo")
 
-    base_patch = ips.Patch.create(old_logo.tobytes(), new_logo.tobytes())
+        new_f = io.BytesIO(new_logo.tobytes())
+        new_f.seek(0, 2)
+        new_len = new_f.tell()
+        new_f.seek(0)
+
+        base_patch = ips.Patch()
+        while new_f.tell() < new_len:
+            base_patch.add_record(new_f.tell(), new_f.read(0xFFFF))
+    else:
+        old_logo = Image.open(args.old_logo).convert("RGBA")
+        new_logo = Image.open(args.new_logo).convert("RGBA")
+        if old_logo.size != (308, 350) or new_logo.size != (308, 350):
+            raise ValueError("Invalid size for the logo")
+
+        base_patch = ips.Patch.create(old_logo.tobytes(), new_logo.tobytes())
 
     if not args.patches_dir.exists():
-        os.makedirs(args.patches_dir)
+        args.patches_dir.mkdir(parents=True)
 
     for build_id, offset in patch_info.items():
-        tmp_p = copy.deepcopy(base_patch)
+        tmp_p = ips.Patch()
 
-        for r in tmp_p.records:
-            r.offset += offset
-
-            if r.offset > 0xFFFFFF:
-                tmp_p.ips32 = True
+        for r in base_patch.records:
+            tmp_p.add_record(r.offset + offset, r.content, r.rle_size)
 
         with Path(args.patches_dir, f"{build_id}.ips").open("wb") as f:
             f.write(bytes(tmp_p))
