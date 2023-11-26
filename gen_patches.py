@@ -5,6 +5,7 @@ import ips
 import argparse
 from pathlib import Path
 from PIL import Image
+from rembg import remove
 
 # Build Id: offset
 patch_info = {
@@ -31,19 +32,66 @@ patch_info = {
     "7E9BB552AAEFF82363D1E8C97B5C6B95E3989E1A": 1704192,
     "BA15B407573B8CECF0FAE2B367D3103A2A1E821C": 2191616,
     "34D15383767E313EE76F1EE991CD00AD2BF8C62A": 2023680,
+
 }
+
+def ResizeIM(IMLogo):
+    #Remove Background
+    if args.no_remove != "yes":
+        IMLogo = remove(IMLogo, post_process_mask=True)
+    #crop to minimal possible image, removing transparent background
+    IMLogoSize = IMLogo.size
+    IMLogoBox = IMLogo.getbbox()
+    IMLogoComponents = IMLogo.split()
+    rgbIMLogo = Image.new("RGB", IMLogoSize, (0,0,0))
+    rgbIMLogo.paste(IMLogo, mask=IMLogoComponents[3])
+    croppedBox = rgbIMLogo.getbbox()
+    if IMLogoBox != croppedBox:
+        IMLogo=IMLogo.crop(croppedBox)
+    #Resize image to 308 X 350 Preserving Aspect Ratio
+    IMWidth = IMLogo.width
+    IMHeight = IMLogo.height
+    Aspect = IMWidth / IMHeight                                         # Get current Aspect Ratio
+    if Aspect > 0.88:                                                   # it is wider than it is tall
+        NewAspect = IMWidth / 308
+        NewWidth = 308
+        NewHeight = round(IMHeight / NewAspect)
+        Difference = -1 * round(abs((350 - NewHeight)/2))
+        IMLogo = IMLogo.resize((NewWidth, NewHeight))                   # resize image to near 308 * 350
+        IMLogo = IMLogo.crop((0, Difference, 308, 350 + Difference))    # create new image 308 * 350 with the image center
+    else:                                                               # it is tall than it is wider
+        NewAspect = IMHeight / 308
+        print("NewAspect", NewAspect)
+        NewWidth = round(IMWidth / NewAspect)
+        NewHeight = 350
+        Difference = -1 * round(abs((308 - NewWidth)/2))
+        print(NewWidth)
+        print(NewWidth, NewHeight, Difference)
+        IMLogo = IMLogo.resize((NewWidth, NewHeight))                   # resize image to near 308 * 350
+        IMLogo = IMLogo.crop((Difference, 0, 308 + Difference, 350))    # create new image 308 * 350 with the image center
+
+    Blk_image = Image.new("RGBA", IMLogo.size, "BLACK")                 # Create a Black rgba background
+    Blk_image.paste(IMLogo, (0, 0), IMLogo)                             # Paste the image on the background.
+    if not args.Save_Processed is None:
+        Blk_image.save(args.Save_Processed)
+    return Blk_image
+
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("patches_dir", help="The directory where the generated patches will be dumped", type=Path)
     parser.add_argument("new_logo", help="The new logo image", type=Path)
+    parser.add_argument("-nr", "--no_remove", help="yes = No remove background at resize", type=str, default="no")
+    parser.add_argument("-sp", "--Save_Processed", help="Name to save a copy of the processed image", type=Path, default=None)
     parser.add_argument("-o", "--old_logo", help="The original logo image", type=Path, default=None)
     args = parser.parse_args()
 
     if args.old_logo is None:
         new_logo = Image.open(args.new_logo).convert("RGBA")
         if new_logo.size != (308, 350):
-            raise ValueError("Invalid size for the logo")
+            new_logo = ResizeIM(new_logo)                               # Resize Image to 308 * 350 preserving Aspect Ratio
 
         new_f = io.BytesIO(new_logo.tobytes())
         new_f.seek(0, 2)
@@ -57,7 +105,7 @@ if __name__ == "__main__":
         old_logo = Image.open(args.old_logo).convert("RGBA")
         new_logo = Image.open(args.new_logo).convert("RGBA")
         if old_logo.size != (308, 350) or new_logo.size != (308, 350):
-            raise ValueError("Invalid size for the logo")
+            new_logo = ResizeIM(new_logo)                               # Resize Image to 308 * 350 preserving Aspect Ratio
 
         base_patch = ips.Patch.create(old_logo.tobytes(), new_logo.tobytes())
 
@@ -72,3 +120,4 @@ if __name__ == "__main__":
 
         with Path(args.patches_dir, f"{build_id}.ips").open("wb") as f:
             f.write(bytes(tmp_p))
+            
